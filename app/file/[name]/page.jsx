@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 const WORD_OVERRIDES = {
@@ -17,6 +17,10 @@ const WORD_OVERRIDES = {
   youtube: "YouTube",
 };
 
+const MEDIA_HUB_URL = process.env.NEXT_PUBLIC_MEDIA_HUB_URL || "https://main.d79ps74xfj764.amplifyapp.com";
+const MEDIA_DRAFT_PREFIX = "notes-media-draft:";
+const MEDIA_PENDING_PREFIX = "notes-media-pending:";
+
 function formatTitle(filename) {
   return filename
     .replace(/\.md$/i, "")
@@ -26,9 +30,18 @@ function formatTitle(filename) {
     .join(" ");
 }
 
+function mediaAltText(name) {
+  return String(name || "Image")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[\[\]]/g, "")
+    .trim() || "Image";
+}
+
 export default function FilePage() {
   const params = useParams();
   const router = useRouter();
+  const editorRef = useRef(null);
+  const restoreAttemptedRef = useRef(false);
   const fileName = useMemo(() => {
     const value = Array.isArray(params?.name) ? params.name[0] : params?.name;
     return value || "";
@@ -75,6 +88,72 @@ export default function FilePage() {
   useEffect(() => {
     loadFile();
   }, [fileName]);
+
+  useEffect(() => {
+    if (loading || !file || !fileName || restoreAttemptedRef.current || typeof window === "undefined") return;
+    restoreAttemptedRef.current = true;
+
+    const search = new URLSearchParams(window.location.search);
+    const queryDraftKey = search.get("draftKey");
+    const pendingStorageKey = `${MEDIA_PENDING_PREFIX}${fileName}`;
+    const pendingDraftKey = window.localStorage.getItem(pendingStorageKey);
+    const draftKey = queryDraftKey || pendingDraftKey;
+
+    if (!draftKey) return;
+
+    const draftStorageKey = `${MEDIA_DRAFT_PREFIX}${draftKey}`;
+    const rawDraft = window.localStorage.getItem(draftStorageKey);
+
+    if (!rawDraft) {
+      window.localStorage.removeItem(pendingStorageKey);
+      if (search.get("mediaReturn") === "1") {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+      return;
+    }
+
+    try {
+      const draft = JSON.parse(rawDraft);
+      if (draft.fileName !== fileName || typeof draft.editorValue !== "string") {
+        throw new Error("The saved media draft did not match this note.");
+      }
+
+      const mediaUrl = search.get("mediaUrl");
+      const mediaType = search.get("mediaType");
+      const mediaName = search.get("mediaName");
+      const start = Math.max(0, Math.min(Number(draft.selectionStart) || 0, draft.editorValue.length));
+      const end = Math.max(start, Math.min(Number(draft.selectionEnd) || start, draft.editorValue.length));
+      let nextValue = draft.editorValue;
+      let nextCursor = start;
+
+      if (mediaUrl) {
+        const insertion = mediaType === "image"
+          ? `![${mediaAltText(mediaName)}](${mediaUrl})`
+          : mediaUrl;
+        nextValue = `${draft.editorValue.slice(0, start)}${insertion}${draft.editorValue.slice(end)}`;
+        nextCursor = start + insertion.length;
+      }
+
+      setEditorValue(nextValue);
+      setMode("edit");
+      setShowNote(false);
+      setStatus(mediaUrl ? "Media added to draft. Save when ready." : "Draft restored.");
+      setError("");
+
+      window.setTimeout(() => {
+        editorRef.current?.focus();
+        editorRef.current?.setSelectionRange(nextCursor, nextCursor);
+      }, 50);
+    } catch (err) {
+      setError(err.message || "Unable to restore the draft after Media Hub.");
+    } finally {
+      window.localStorage.removeItem(draftStorageKey);
+      window.localStorage.removeItem(pendingStorageKey);
+      if (search.get("mediaReturn") === "1" || queryDraftKey) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, [file, fileName, loading]);
 
   async function saveContent(nextContent, successMessage) {
     if (!file) return false;
@@ -125,6 +204,40 @@ export default function FilePage() {
 
     const separator = content.endsWith("\n\n") ? "" : content.endsWith("\n") ? "\n" : "\n\n";
     await saveContent(`${content}${separator}${trimmed}\n`, "Note added to GitHub.");
+  }
+
+  function openMediaHub() {
+    if (!fileName || typeof window === "undefined") return;
+
+    try {
+      const selectionStart = editorRef.current?.selectionStart ?? editorValue.length;
+      const selectionEnd = editorRef.current?.selectionEnd ?? selectionStart;
+      const draftId = typeof window.crypto?.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      window.localStorage.setItem(`${MEDIA_DRAFT_PREFIX}${draftId}`, JSON.stringify({
+        fileName,
+        editorValue,
+        selectionStart,
+        selectionEnd,
+        savedAt: Date.now(),
+      }));
+      window.localStorage.setItem(`${MEDIA_PENDING_PREFIX}${fileName}`, draftId);
+
+      const returnUrl = new URL(window.location.pathname, window.location.origin);
+      returnUrl.searchParams.set("mediaReturn", "1");
+      returnUrl.searchParams.set("draftKey", draftId);
+
+      const mediaUrl = new URL(MEDIA_HUB_URL);
+      mediaUrl.searchParams.set("source", "notes");
+      mediaUrl.searchParams.set("returnTo", returnUrl.toString());
+      mediaUrl.searchParams.set("draftKey", draftId);
+
+      window.location.assign(mediaUrl.toString());
+    } catch (err) {
+      setError(err.message || "Unable to preserve this draft before opening Media Hub.");
+    }
   }
 
   async function handleDelete() {
@@ -195,6 +308,7 @@ export default function FilePage() {
             ) : (
               <>
                 <button className="button primary-button" type="button" disabled={saving} onClick={() => saveContent(editorValue, "Changes saved to GitHub.")}>{saving ? "Saving…" : "Save"}</button>
+                <button className="button secondary-button" type="button" disabled={saving} onClick={openMediaHub}>Media</button>
                 <button className="button secondary-button" type="button" disabled={saving} onClick={() => { setMode("read"); setEditorValue(content); }}>Cancel</button>
               </>
             )}
@@ -228,6 +342,7 @@ export default function FilePage() {
           {mode === "edit" ? (
             <section className="editor-panel">
               <textarea
+                ref={editorRef}
                 className="markdown-editor"
                 value={editorValue}
                 onChange={(event) => setEditorValue(event.target.value)}
