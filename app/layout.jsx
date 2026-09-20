@@ -14,6 +14,15 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Chat README Hub",
   description: "Mobile dashboard for browsing and editing Markdown notes stored in GitHub.",
+  applicationName: "Notes Hub",
+  appleWebApp: {
+    capable: true,
+    title: "Notes Hub",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport = {
