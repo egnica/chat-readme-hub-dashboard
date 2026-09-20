@@ -26,9 +26,17 @@ function formatTitle(filename) {
     .join(" ");
 }
 
-function formatSize(bytes = 0) {
-  if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
+function formatDate(value) {
+  if (!value) return "Date unavailable";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
 export default function Home() {
@@ -141,7 +149,7 @@ export default function Home() {
                 <p>{file.name}</p>
               </div>
               <div className="file-card-meta">
-                <span>{formatSize(file.size)}</span>
+                <span>{formatDate(file.date)}</span>
                 <span className="chevron" aria-hidden="true">›</span>
               </div>
             </Link>
