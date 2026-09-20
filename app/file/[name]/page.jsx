@@ -185,6 +185,7 @@ export default function FilePage() {
           </section>
 
           <section className="action-bar" aria-label="File actions">
+            <Link className="button secondary-button" href="/">Home</Link>
             {mode === "read" ? (
               <>
                 <button className="button primary-button" type="button" onClick={() => { setMode("edit"); setEditorValue(content); setStatus(""); }}>Edit</button>
