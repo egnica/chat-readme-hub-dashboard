@@ -15,6 +15,8 @@ const WORD_OVERRIDES = {
   youtube: "YouTube",
 };
 
+const CHAT_NOTES_PROJECT_URL = "https://chatgpt.com/g/g-p-6aaf8754de0c8191aefbd0fd7f6c42b2-chat-notes/project";
+
 function formatTitle(filename) {
   return filename
     .replace(/\.md$/i, "")
@@ -81,6 +83,17 @@ export default function Home() {
           ↻
         </button>
       </header>
+
+      <section aria-label="Start a Chat Note" style={{ marginBottom: "18px" }}>
+        <a
+          className="button primary-button full-width-button"
+          href={CHAT_NOTES_PROJECT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          🎙 Start Chat Note
+        </a>
+      </section>
 
       <section className="dashboard-controls" aria-label="File tools">
         <label className="search-box">
