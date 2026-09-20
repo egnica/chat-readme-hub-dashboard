@@ -59,6 +59,7 @@ export default function FilePage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [copyLabel, setCopyLabel] = useState("Copy");
 
   async function loadFile() {
     if (!fileName) return;
@@ -206,6 +207,32 @@ export default function FilePage() {
     await saveContent(`${content}${separator}${trimmed}\n`, "Note added to GitHub.");
   }
 
+  async function copyMarkdown() {
+    const text = mode === "edit" ? editorValue : content;
+    if (typeof window === "undefined") return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+
+      setCopyLabel("Copied ✓");
+      window.setTimeout(() => setCopyLabel("Copy"), 1400);
+    } catch {
+      setError("Could not copy this note to the clipboard.");
+    }
+  }
+
   function openMediaHub() {
     if (!fileName || typeof window === "undefined") return;
 
@@ -302,12 +329,14 @@ export default function FilePage() {
             {mode === "read" ? (
               <>
                 <button className="button primary-button" type="button" onClick={() => { setMode("edit"); setEditorValue(content); setStatus(""); }}>Edit</button>
+                <button className="button secondary-button" type="button" onClick={copyMarkdown}>{copyLabel}</button>
                 <button className="button secondary-button" type="button" onClick={() => { setShowNote(true); setStatus(""); }}>Add note</button>
                 <button className="button danger-ghost-button" type="button" onClick={() => setShowDelete(true)}>Delete</button>
               </>
             ) : (
               <>
                 <button className="button primary-button" type="button" disabled={saving} onClick={() => saveContent(editorValue, "Changes saved to GitHub.")}>{saving ? "Saving…" : "Save"}</button>
+                <button className="button secondary-button" type="button" disabled={saving} onClick={copyMarkdown}>{copyLabel}</button>
                 <button className="button secondary-button" type="button" disabled={saving} onClick={openMediaHub}>Media</button>
                 <button className="button secondary-button" type="button" disabled={saving} onClick={() => { setMode("read"); setEditorValue(content); }}>Cancel</button>
               </>
